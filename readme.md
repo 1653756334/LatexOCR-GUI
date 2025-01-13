@@ -43,7 +43,9 @@
 
 1. 配置 API
    - 在设置页面配置 Simpletex API 地址和令牌
-   - 目前仅支持 Simpletex，后续会扩展支持其他服务
+   - 目前仅支持 [Simpletex](https://simpletex.cn/api)，后续会扩展支持其他服务
+   ![simpletex](images/simpletex.png)
+   - 项目使用的是标准公式识别模型，每日免费500次
 
 2. 识别公式
    - 选择图片：点击"选择图片"按钮上传本地图片
