@@ -5,3 +5,5 @@ requests==2.32.3
 numpy==2.2.1
 opencv-python==4.10.0.84
 pyinstaller==6.11.1
+pynput==1.7.6
+latex2mathml==3.77.0

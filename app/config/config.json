@@ -1,14 +1,14 @@
 {
     "LatexOCR": {
         "ApiUrl": "https://server.simpletex.cn/api/latex_ocr",
-        "Token": "abcdefghijklmnabcdasdashdbjhasdbhjasbdjhasbdjhasdbjhadbahsjbdja" ,
+        "Token": "AVYKkKHTpItaAthTR9kVc9yiQWszEeg1ooSvsXqfTnfHWvmy7HmKuy6IW1l0xBIZ",
         "Type": "Simpletex"
     },
     "Material": {
         "AcrylicBlurRadius": 15
     },
     "Update": {
-        "CheckUpdateAtStartUp": true
+        "CheckUpdateAtStartUp": false
     },
     "ObjectDetection": {
         "ConfidenceThreshold": 33,
@@ -16,13 +16,16 @@
         "Model": "YOLO11s"
     },
     "Folders": {
-        "Download": "C:/Users/Administrator/Documents/code/gallery/app/download",
+        "Download": "D:/a_notes/py/tools/LatexOCR-GUI/app/download",
         "LocalMusic": []
     },
     "MainWindow": {
         "DpiScale": "Auto",
-        "Language": "Auto",
-        "MicaEnabled": true
+        "Language": "zh_CN",
+        "MicaEnabled": false
+    },
+    "Hotkey": {
+        "ScreenshotHotkey": "Ctrl+Alt+S"
     },
     "QFluentWidgets": {
         "ThemeColor": "#ff009faa",

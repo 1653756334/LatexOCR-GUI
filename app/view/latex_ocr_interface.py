@@ -3,11 +3,11 @@ from qfluentwidgets import (ScrollArea, PrimaryPushButton, CardWidget,
                           LineEdit, TextEdit, PushButton, ToolButton,
                           StateToolTip, PrimaryToolButton, Dialog, MessageBox)
 from qfluentwidgets import FluentIcon as FIF
-from PyQt5.QtCore import Qt, QTimer, QSize, QRectF, QPointF
+from PyQt5.QtCore import Qt, QTimer, QSize, QRectF, QPointF, QPropertyAnimation, QEasingCurve, QMimeData
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QPainterPath
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, 
                            QApplication, QLabel, QGridLayout, QFileDialog,
-                           QTabWidget, QDialog, QSizePolicy)
+                           QTabWidget, QDialog, QSizePolicy, QGraphicsOpacityEffect)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl
 from ..common.config import cfg
@@ -327,6 +327,17 @@ class LatexOcrInterface(ScrollArea):
         self.resultCard = CardWidget(self.view)
         self.resultCard.hide()
         self.resultCard.setFixedHeight(350)  # 增加一点高度
+        
+        # 添加透明度效果用于动画
+        self.resultOpacityEffect = QGraphicsOpacityEffect()
+        self.resultOpacityEffect.setOpacity(0.0)
+        self.resultCard.setGraphicsEffect(self.resultOpacityEffect)
+        
+        # 创建透明度动画
+        self.resultFadeAnimation = QPropertyAnimation(self.resultOpacityEffect, b"opacity")
+        self.resultFadeAnimation.setDuration(300)  # 300ms动画
+        self.resultFadeAnimation.setEasingCurve(QEasingCurve.OutCubic)
+        
         self.resultLayout = QVBoxLayout(self.resultCard)
         self.resultLayout.setSpacing(8)
         self.resultLayout.setContentsMargins(16, 16, 16, 16)
@@ -393,11 +404,13 @@ class LatexOcrInterface(ScrollArea):
         # 创建带文字的按钮
         self.copyTextButton = PrimaryPushButton('复制Latex', self, FIF.COPY)
         self.copyLatexButton = PrimaryPushButton('复制LaTeX(带$$)', self, FIF.CODE)
+        self.copyWordButton = PrimaryPushButton('复制Word格式', self, FIF.DOCUMENT)
         self.copyImageButton = PrimaryPushButton('复制图片', self, FIF.PHOTO)
         
         # 添加按钮
         self.copyLayout.addWidget(self.copyTextButton)
         self.copyLayout.addWidget(self.copyLatexButton)
+        self.copyLayout.addWidget(self.copyWordButton)
         self.copyLayout.addWidget(self.copyImageButton)
         self.copyLayout.addStretch(1)
         
@@ -411,14 +424,15 @@ class LatexOcrInterface(ScrollArea):
         # 添加到主布局
         self.hBoxLayout.addWidget(self.inputCard)
         self.hBoxLayout.addWidget(self.resultCard)
-        self.hBoxLayout.setStretch(0, 4)  # 输入区域
-        self.hBoxLayout.setStretch(1, 3)  # 结果区域
+        self.hBoxLayout.setStretch(0, 2)  # 输入区域 - 减少宽度比例
+        self.hBoxLayout.setStretch(1, 5)  # 结果区域 - 增加宽度比例
         
         # 绑定事件
         self.uploadButton.clicked.connect(self.uploadImage)
         self.drawButton.clicked.connect(self.showDrawingDialog)
         self.copyTextButton.clicked.connect(self.copyText)
         self.copyLatexButton.clicked.connect(self.copyLatex)
+        self.copyWordButton.clicked.connect(self.copyWord)
         self.copyImageButton.clicked.connect(self.copyImage)
         self.resultEdit.textChanged.connect(self.onLatexChanged)
 
@@ -429,6 +443,11 @@ class LatexOcrInterface(ScrollArea):
             # 调整左右区域的大小比例为 4:3
             self.hBoxLayout.setStretch(0, 4)
             self.hBoxLayout.setStretch(1, 3)
+            
+            # 启动淡入动画
+            self.resultFadeAnimation.setStartValue(0.0)
+            self.resultFadeAnimation.setEndValue(1.0)
+            self.resultFadeAnimation.start()
 
     def showLoading(self, text="正在识别..."):
         """显示加载状态"""
@@ -436,9 +455,13 @@ class LatexOcrInterface(ScrollArea):
             self.stateTooltip.setContent(text)
         else:
             self.stateTooltip = StateToolTip(text, '请稍候', self)
-            self.stateTooltip.move(self.width() // 2 - self.stateTooltip.width() // 2,
-                                 self.height() // 2 - self.stateTooltip.height() // 2)
+            # 计算居中位置
+            tooltip_x = self.width() // 2 - 100
+            tooltip_y = self.height() // 2 - 50
+            self.stateTooltip.move(tooltip_x, tooltip_y)
         self.stateTooltip.show()
+        # 确保加载提示在最前面
+        self.stateTooltip.raise_()
 
     def hideLoading(self):
         """隐藏加载状态"""
@@ -454,12 +477,13 @@ class LatexOcrInterface(ScrollArea):
             self.imageLabel.setImage(file_path)
             InfoBar.success(
                 title='上传成功',
-                content='已成功上传图片',
+                content='已成功上传图片，正在识别...',
                 duration=2000,
                 position=InfoBarPosition.TOP,
                 parent=self
             )
-            self.recognizeFormula()
+            # 使用定时器延迟一下，确保UI更新后再开始识别
+            QTimer.singleShot(100, self.recognizeFormula)
             
     def pasteImage(self):
         self.handlePaste()
@@ -497,25 +521,16 @@ class LatexOcrInterface(ScrollArea):
             result = self.ocr_service.recognize(img)
             
             if result['status']:
-                # 保存历史记录
-                _, img_encoded = cv2.imencode('.png', img)
-                record_id = self.db.add_record(
-                    img_encoded.tobytes(),
-                    result['latex'],
-                    result['confidence'],
-                    result['request_id']
-                )
-                self.current_record_id = record_id
+                # 立即显示结果区域和基本信息，让用户知道识别已完成
+                self.showResult()
                 
-                # 更新界面
+                # 立即更新文本内容
                 self.resultEdit.setText(result['latex'])
                 
-                # 更新置信度显示
+                # 立即更新置信度显示
                 confidence_value = int(result['confidence'] * 100)
                 self.confidenceBar.setValue(confidence_value)
                 self.confidenceValueLabel.setText(f"{confidence_value}%")
-                
-                # 设置置信度颜色
                 self.updateConfidenceColor(confidence_value)
                 
                 # 显示成功信息
@@ -527,8 +542,12 @@ class LatexOcrInterface(ScrollArea):
                     parent=self
                 )
                 
-                # 显示结果区域
-                self.showResult()
+                # 延迟渲染LaTeX（避免阻塞UI）
+                QTimer.singleShot(50, lambda: self.updateRender())
+                
+                # 保存历史记录（异步进行）
+                QTimer.singleShot(100, lambda: self.saveRecord(img, result))
+                
             else:
                 InfoBar.error(
                     title='识别失败',
@@ -549,6 +568,20 @@ class LatexOcrInterface(ScrollArea):
             )
         finally:
             self.hideLoading()
+
+    def saveRecord(self, img, result):
+        """异步保存历史记录"""
+        try:
+            _, img_encoded = cv2.imencode('.png', img)
+            record_id = self.db.add_record(
+                img_encoded.tobytes(),
+                result['latex'],
+                result['confidence'],
+                result['request_id']
+            )
+            self.current_record_id = record_id
+        except Exception as e:
+            print(f"保存历史记录失败: {str(e)}")
 
     def updateConfidenceColor(self, confidence_value):
         """更新置信度进度条颜色"""
@@ -575,6 +608,69 @@ class LatexOcrInterface(ScrollArea):
         latex = f"$${self.resultEdit.toPlainText()}$$"
         QApplication.clipboard().setText(latex)
         self.showCopySuccess('LaTeX')
+
+    def copyWord(self):
+        """复制Word格式的公式"""
+        try:
+            latex = self.resultEdit.toPlainText().strip()
+            if not latex:
+                InfoBar.warning(
+                    title='提示',
+                    content='没有可复制的内容',
+                    duration=2000,
+                    position=InfoBarPosition.TOP,
+                    parent=self
+                )
+                return
+            
+            # 使用latex2mathml生成标准MathML
+            from latex2mathml.converter import convert
+            
+            # 清理LaTeX格式
+            clean_latex = latex
+            if clean_latex.startswith('$$') and clean_latex.endswith('$$'):
+                clean_latex = clean_latex[2:-2]
+            elif clean_latex.startswith('$') and clean_latex.endswith('$'):
+                clean_latex = clean_latex[1:-1]
+            
+            # 转换为MathML（保持原始格式）
+            mathml = convert(clean_latex)
+            
+            # 创建剪贴板数据
+            mime_data = QMimeData()
+            
+            # 设置HTML格式（Word最容易识别这种方式）
+            html_content = f'''<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body>
+{mathml}
+</body>
+</html>'''
+            mime_data.setHtml(html_content)
+            
+            # 设置为纯文本（作为备用）
+            mime_data.setText(mathml)
+            
+            QApplication.clipboard().setMimeData(mime_data)
+            
+            InfoBar.success(
+                title='已复制MathML格式',
+                content='直接粘贴到Word，选择"保留原格式"即可显示公式',
+                duration=4000,
+                position=InfoBarPosition.TOP,
+                parent=self
+            )
+            
+        except Exception as e:
+            InfoBar.error(
+                title='复制失败',
+                content=f'MathML转换失败: {str(e)}',
+                duration=2000,
+                position=InfoBarPosition.TOP,
+                parent=self
+            )
 
     def copyImage(self):
         """复制渲染后的公式图像"""
@@ -619,8 +715,10 @@ class LatexOcrInterface(ScrollArea):
         )
 
     def updateRender(self):
+        """更新LaTeX渲染"""
         latex = self.resultEdit.toPlainText()
-        self.latexRenderer.render_latex(latex)
+        if latex.strip():  # 只有当有内容时才渲染
+            self.latexRenderer.render_latex(latex)
 
     def keyPressEvent(self, event):
         """ 监控键盘事件 """
@@ -655,12 +753,13 @@ class LatexOcrInterface(ScrollArea):
                 self.imageLabel.setPixmap(scaled_pixmap)
                 InfoBar.success(
                     title='粘贴成功',
-                    content='已成功粘贴图片',
+                    content='已成功粘贴图片，正在识别...',
                     duration=2000,
                     position=InfoBarPosition.TOP,
                     parent=self
                 )
-                self.recognizeFormula()
+                # 立即显示加载动画
+                QTimer.singleShot(100, self.recognizeFormula)
         else:
             InfoBar.warning(
                 title='提示',
@@ -703,8 +802,15 @@ class LatexOcrInterface(ScrollArea):
             self.imageLabel.setFixedSize(250, 250)  # 调整标签大小
             self.imageLabel.setPixmap(scaled_pixmap)
             self.imageLabel.show()
-            # 开始识别
-            self.recognizeFormula(from_drawing=True, drawing_image=image)
+            InfoBar.success(
+                title='手写输入完成',
+                content='正在识别手写公式...',
+                duration=2000,
+                position=InfoBarPosition.TOP,
+                parent=self
+            )
+            # 使用定时器延迟一下，确保UI更新后再开始识别
+            QTimer.singleShot(100, lambda: self.recognizeFormula(from_drawing=True, drawing_image=image))
             
     def onLatexChanged(self):
         """处理 LaTeX 文本变化（带防抖）"""
@@ -721,3 +827,31 @@ class LatexOcrInterface(ScrollArea):
             self.db.update_latex(self.current_record_id, latex)
         else:
             print("No current_record_id available")  # 打印没有ID的情况 
+
+    def loadScreenshot(self, image_path):
+        """加载截图并开始识别"""
+        try:
+            # 显示截图
+            self.imageLabel.setImage(image_path)
+            self.imageLabel.show()
+            
+            # 显示成功信息
+            InfoBar.success(
+                title='截图成功',
+                content='已获取截图，正在识别公式...',
+                duration=2000,
+                position=InfoBarPosition.TOP,
+                parent=self
+            )
+            
+            # 延迟一下让UI更新，然后开始识别
+            QTimer.singleShot(200, self.recognizeFormula)
+            
+        except Exception as e:
+            InfoBar.error(
+                title='截图加载失败',
+                content=str(e),
+                duration=2000,
+                position=InfoBarPosition.TOP,
+                parent=self
+            )

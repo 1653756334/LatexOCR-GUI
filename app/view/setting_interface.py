@@ -13,6 +13,7 @@ import re  # 在文件顶部添加
 from ..common.config import cfg, HELP_URL, FEEDBACK_URL, AUTHOR, VERSION, YEAR, isWin11
 from ..common.signal_bus import signalBus
 from ..common.style_sheet import StyleSheet
+from ..components.hotkey_dialog import HotkeySettingDialog
 
 
 class CustomMessageBox(MessageBoxBase):
@@ -177,6 +178,16 @@ class SettingInterface(ScrollArea):
             self.latexOcrGroup
         )
 
+        # 快捷键配置
+        self.hotkeyGroup = SettingCardGroup("快捷键设置", self.scrollWidget)
+        self.screenshotHotkeyCard = PushSettingCard(
+            "设置",
+            FIF.COMMAND_PROMPT,
+            "截图快捷键",
+            cfg.screenshotHotkey.value,
+            self.hotkeyGroup
+        )
+
         self.__initWidget()
 
     def __initWidget(self):
@@ -218,6 +229,10 @@ class SettingInterface(ScrollArea):
         self.latexOcrGroup.addSettingCard(self.apiUrlCard)
         self.latexOcrGroup.addSettingCard(self.tokenCard)
         self.expandLayout.addWidget(self.latexOcrGroup)
+
+        # 添加快捷键配置组
+        self.hotkeyGroup.addSettingCard(self.screenshotHotkeyCard)
+        self.expandLayout.addWidget(self.hotkeyGroup)
 
         # add setting card group to layout
         self.expandLayout.setSpacing(28)
@@ -261,6 +276,9 @@ class SettingInterface(ScrollArea):
         # 连接 API URL 和 Token 的点击事件
         self.apiUrlCard.clicked.connect(self.__onApiUrlCardClicked)
         self.tokenCard.clicked.connect(self.__onTokenCardClicked)
+
+        # 连接快捷键设置的点击事件
+        self.screenshotHotkeyCard.clicked.connect(self.__onScreenshotHotkeyCardClicked)
 
     def __onApiUrlCardClicked(self):
         """ API URL card clicked slot """
@@ -306,3 +324,22 @@ class SettingInterface(ScrollArea):
                     position=InfoBarPosition.TOP,
                     parent=self
                 )
+
+    def __onScreenshotHotkeyCardClicked(self):
+        """ 截图快捷键设置卡片点击事件 """
+        dialog = HotkeySettingDialog(cfg.screenshotHotkey.value, self)
+        if dialog.exec():
+            hotkey = dialog.getHotkey()
+            if hotkey and hotkey != cfg.screenshotHotkey.value:
+                cfg.screenshotHotkey.value = hotkey
+                self.screenshotHotkeyCard.setContent(hotkey)
+                cfg.save()
+                InfoBar.success(
+                    title='设置成功',
+                    content=f'截图快捷键已设置为 {hotkey}',
+                    duration=2000,
+                    position=InfoBarPosition.TOP,
+                    parent=self
+                )
+                # 发送快捷键更新信号
+                signalBus.screenshotHotkeyChanged.emit(hotkey)

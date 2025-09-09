@@ -21,43 +21,79 @@ class LaTeXRenderer(QWebEngineView):
             <!DOCTYPE html>
             <html>
             <head>
-                <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-                <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
                 <script>
-                    MathJax.Hub.Queue(function () {
-                        // 当 MathJax 完成渲染后，发送高度信息
-                        var height = document.body.scrollHeight;
-                        window.parent.postMessage(height, '*');
-                    });
+                    window.MathJax = {
+                        tex: {
+                            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+                            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']]
+                        },
+                        svg: {
+                            fontCache: 'local',
+                            scale: 1.2,
+                            minScale: 0.5,
+                            mtextInheritFont: false,
+                            merrorInheritFont: true,
+                            mathmlSpacing: false,
+                            skipAttributes: {},
+                            exFactor: 0.5,
+                            displayAlign: 'center',
+                            displayIndent: '0'
+                        },
+                        startup: {
+                            typeset: false,
+                            ready: () => {
+                                MathJax.startup.defaultReady();
+                                MathJax.startup.promise.then(() => {
+                                    // 渲染完成后调整高度
+                                    setTimeout(() => {
+                                        var height = document.body.scrollHeight;
+                                        document.body.style.minHeight = height + 'px';
+                                    }, 100);
+                                });
+                            }
+                        }
+                    };
                 </script>
+                <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
                 <style>
                     body {
                         margin: 0;
-                        padding: 0;
+                        padding: 10px;
                         display: flex;
                         justify-content: center;
                         align-items: center;
                         min-height: 60px;
-                        height: auto;
                         background: white;
+                        font-family: 'Times New Roman', serif;
                     }
                     .math {
                         font-size: 18px;
                         line-height: 1.2;
-                        padding: 16px;
-                        margin: 0;
-                        width: 100%;
                         text-align: center;
+                        width: 100%;
+                        opacity: 0;
+                        transition: opacity 0.3s ease-in-out;
                     }
-                    .MathJax {
+                    .math.loaded {
+                        opacity: 1;
+                    }
+                    mjx-container {
                         margin: 0 !important;
                         padding: 0 !important;
-                        display: inline-block !important;
                     }
                 </style>
             </head>
             <body>
-                <div class="math">$$__LATEX__$$</div>
+                <div class="math" id="mathContainer">$$__LATEX__$$</div>
+                <script>
+                    // 立即开始渲染
+                    MathJax.typesetPromise().then(() => {
+                        document.getElementById('mathContainer').classList.add('loaded');
+                    }).catch((err) => {
+                        console.log('MathJax rendering error:', err);
+                        document.getElementById('mathContainer').classList.add('loaded');
+                    });
+                </script>
             </body>
             </html>
         """

@@ -70,6 +70,9 @@ class Config(QConfig):
     api_url = ConfigItem("LatexOCR", "ApiUrl", "https://server.simpletex.cn/api/latex_ocr", NonEmptyStringValidator())
     token = ConfigItem("LatexOCR", "Token", "abc" * 10, NonEmptyStringValidator())
 
+    # 快捷键设置
+    screenshotHotkey = ConfigItem("Hotkey", "ScreenshotHotkey", "Ctrl+Alt+S", NonEmptyStringValidator())
+
 YEAR = 2025
 AUTHOR = "ziuch"
 VERSION = "1.0.0"

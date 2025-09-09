@@ -1,5 +1,5 @@
 # coding: utf-8
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QUrl, QSize, QTimer, QRect
 from PyQt5.QtGui import QIcon, QDesktopServices, QColor, QPainter, QImage, QBrush, QColor, QFont, QDesktopServices
 from PyQt5.QtWidgets import QApplication
@@ -30,6 +30,8 @@ from ..common.icon import Icon
 from ..common.signal_bus import signalBus
 from ..common.translator import Translator
 from ..common import resource
+from ..components.screenshot_manager import ScreenshotManager
+from ..components.global_hotkey import global_hotkey_manager
 
 
 class AvatarWidget(NavigationWidget):
@@ -98,6 +100,9 @@ class MainWindow(FluentWindow):
         self.latexOcrInterface = LatexOcrInterface(self)
         self.historyInterface = HistoryInterface(self)
 
+        # 初始化截图管理器
+        self.screenshotManager = ScreenshotManager(self)
+
         # enable acrylic effect
         self.navigationInterface.setAcrylicEnabled(True)
 
@@ -114,6 +119,13 @@ class MainWindow(FluentWindow):
         signalBus.micaEnableChanged.connect(self.setMicaEffectEnabled)
         signalBus.switchToSampleCard.connect(self.switchToSample)
         signalBus.supportSignal.connect(self.onSupport)
+        
+        # 连接快捷键和截图相关信号
+        signalBus.screenshotHotkeyChanged.connect(self.updateScreenshotHotkey)
+        signalBus.screenshotTaken.connect(self.onScreenshotTaken)
+        
+        # 初始化快捷键
+        self.initHotkey()
 
     def initNavigation(self):
         # add navigation items
@@ -197,6 +209,10 @@ class MainWindow(FluentWindow):
     def closeEvent(self, e):
         self.themeListener.terminate()
         self.themeListener.deleteLater()
+        
+        # 停止全局快捷键监听
+        global_hotkey_manager.stop()
+        
         super().closeEvent(e)
 
     def _onThemeChangedFinished(self):
@@ -225,3 +241,32 @@ class MainWindow(FluentWindow):
 
         if w.exec():
             QDesktopServices.openUrl(QUrl("https://github.com/zhiqing0205/LatexOCR-GUI"))
+            
+    def initHotkey(self):
+        """初始化全局快捷键"""
+        hotkey = cfg.screenshotHotkey.value
+        success = global_hotkey_manager.register_hotkey(hotkey, self.onScreenshotHotkeyPressed)
+        if not success:
+            print(f"快捷键 {hotkey} 注册失败")
+        
+    def updateScreenshotHotkey(self, new_hotkey):
+        """更新截图快捷键"""
+        # 先注销旧的快捷键
+        old_hotkey = cfg.screenshotHotkey.value
+        global_hotkey_manager.unregister_hotkey(old_hotkey)
+        
+        # 注册新的快捷键
+        success = global_hotkey_manager.register_hotkey(new_hotkey, self.onScreenshotHotkeyPressed)
+        if not success:
+            print(f"新快捷键 {new_hotkey} 注册失败")
+        
+    def onScreenshotHotkeyPressed(self):
+        """截图快捷键按下处理"""
+        self.screenshotManager.take_screenshot()
+        
+    def onScreenshotTaken(self, image_path):
+        """截图完成处理"""
+        # 切换到公式识别界面
+        self.stackedWidget.setCurrentWidget(self.latexOcrInterface, False)
+        # 加载截图到OCR界面
+        self.latexOcrInterface.loadScreenshot(image_path)

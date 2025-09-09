@@ -8,6 +8,8 @@ class SignalBus(QObject):
     switchToSampleCard = pyqtSignal(str, int)
     micaEnableChanged = pyqtSignal(bool)
     supportSignal = pyqtSignal()
+    screenshotHotkeyChanged = pyqtSignal(str)  # 快捷键更新信号
+    screenshotTaken = pyqtSignal(str)  # 截图完成信号，参数为图片路径
 
 
 signalBus = SignalBus()
